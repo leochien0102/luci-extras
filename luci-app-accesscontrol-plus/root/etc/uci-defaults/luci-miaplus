@@ -1,7 +1,17 @@
 #!/bin/sh
 
-# fw4 与 fw3 共用 /etc/config/firewall 的 config include 机制；fw4_compatible
-# 让 fw4 在 reload 时执行用户脚本，fw3 忽略此未知 option（安全）
+# fw3 与 fw4 共用 /etc/config/firewall 的 config include 机制，但两边各自
+# 认识不同的 option，所以两个都写上，各对一边生效：
+#
+#   reload=1          fw3 生效（reload 时重跑脚本）；fw4 不支持，每次运行
+#                     warn 一行：Section miaplus option 'reload' is not
+#                     supported by fw4。已知噪音，无功能影响。
+#
+#   fw4_compatible=1  fw4 认识；fw3 当作未知 option 忽略（安全）。在 lede
+#                     当前这版 fw4 里其实是冗余的——判定为
+#                     fw4_compatible: [ "bool", data.path != "/etc/firewall.user" ]，
+#                     path 不是那个值时默认就是 true。保留是跨版本保险，
+#                     不是 load-bearing。
 uci -q batch <<-EOF >/dev/null
 	delete ucitrack.@miaplus[-1]
 	add ucitrack miaplus

@@ -243,6 +243,10 @@ _pad() {
 
 # 把一个 [t_on, t_off] 窗口（H:M/HH:MM）转成 nft 时间匹配表达式（行），
 # 输出到全局变量 NFT_FRAGS。nft 的 meta hour 原生支持 "HH:MM"-"HH:MM"。
+# 与 fw3 的差异：fw3 的 daytime_stop 停在 HH:MM:00，fw4 这边补到 :59，
+# 因此每个窗口末尾比 fw3 多生效 59 秒。有意为之——"到 22:00"通常被理解为
+# 包含整个 22:00 分钟。从 fw3 迁过来若觉得规则"多管了一分钟"，原因在此。
+#
 # 统一语义：结束分钟视为完整包含（闭区间含其末秒），故上界一律补 :59 —
 # 非跨午夜 [t_on, t_off] -> "HH:MM"-"t_off:59"；跨午夜拆 [t_on,23:59:59]+[00:00,t_off:59]。
 nft_split_window() {
@@ -376,7 +380,9 @@ start_nft(){
 
 	NFT_FAIL=""
 
-	# 建表/建链也走 nft_rule，使最根本的"建表/建链失败"同样记日志并可回滚
+	# 建表/建链也走 nft_rule，使最根本的"建表/建链失败"同样记日志并可回滚。
+	# 注意 nft add 是幂等的（报 EEXIST 的是 create），所以这里防的不是"表已
+	# 残留"，而是 nft 缺失、内核无 nf_tables 之类的环境问题。
 	nft_rule nft add table inet miaplus
 	nft_rule nft add chain inet miaplus input '{ type filter hook input priority 0; policy accept; }'
 	nft_rule nft add chain inet miaplus prerouting '{ type nat hook prerouting priority dstnat; policy accept; }'
