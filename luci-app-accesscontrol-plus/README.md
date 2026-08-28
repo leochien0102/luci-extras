@@ -32,15 +32,19 @@ fw3 用 `-m time --kerneltz`，由内核按设备时区实时判断；fw4 的 nf
 **依赖说明**
 
 - fw3 依赖 iptables 系列内核模块（见下）。
-- fw4 不额外声明 nft 依赖：`firewall4` 依赖 `nftables-json` 已顺带提供 `/usr/sbin/nft`，且固件已启用 nf_tables。为避免强制所有用户（含 fw3）安装 nft 相关包、以及历史上将 iptables 系列写进 `LUCI_DEPENDS` 后招致兼容问题的前例（见提交 aaa18be / 5e97062 的回滚），本包 `LUCI_DEPENDS` 刻意保持最小依赖 `+snmpd`。
+- fw4 不额外声明 nft 依赖：`firewall4` 依赖 `nftables-json` 已顺带提供 `/usr/sbin/nft`，且固件已启用 nf_tables。为避免强制所有用户（含 fw3）安装 nft 相关包、以及历史上将 iptables 系列写进 `LUCI_DEPENDS` 后招致兼容问题的前例（见提交 aaa18be / 5e97062 的回滚），本包 `LUCI_DEPENDS` **保持为空**，两代防火墙的工具链都在运行期检测。
+- 曾经声明过 `+snmpd`，已移除：本包从未调用任何 SNMP 命令，那是从上游 `luci-app-accesscontrol` fork 时继承下来的遗留依赖，只会给每个安装者多拖进一个 SNMP 守护进程。
 
-**本插件需要安装以下库**
+**运行时需要的外部工具**
 
-请检测是否已安装 snmpd iptables kmod-ipt-nat kmod-nf-nat
+按防火墙世代二选一，本包在运行期自动判定，不强制声明：
 
-如需要支持ipv6请安装 ip6tables
+| 世代 | 需要 |
+|---|---|
+| fw3 | `iptables`、`kmod-ipt-nat`、`kmod-nf-nat`；管控 IPv6 另需 `ip6tables` |
+| fw4 | `nft`（由 `firewall4` → `nftables-json` 提供，通常已在）|
 
-同时需要安装网络基础组件
+两代都需要 `uci`、`logger`、busybox 的 `awk`/`sed`/`grep`——均属基础组件，任何 OpenWrt 固件都自带。
 
 **待真机验证（fw4 / OpenWrt ≥ 23.05 + firewall4）**
 
