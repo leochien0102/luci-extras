@@ -52,40 +52,46 @@
 	});
 //]]></script>
 
-<fieldset class="cbi-section">
-	<legend><%:Status%></legend>
+<%# Markup mirrors what LuCI emits for a section of its own -- see
+    luci-compat's view/cbi/nullsection.htm: div.cbi-section carrying an h3,
+    then div.cbi-section-node around the rows. A fieldset/legend pair puts
+    the title outside the card in any theme that styles .cbi-section as one,
+    which is what proton2025 does. %>
+<div class="cbi-section">
+	<h3><%:Status%></h3>
+	<div class="cbi-section-node">
+		<div class="cbi-value">
+			<label class="cbi-value-title"><%:Service%></label>
+			<div class="cbi-value-field"><span id="ssrpwatch_state">…</span></div>
+		</div>
 
-	<div class="cbi-value">
-		<label class="cbi-value-title"><%:Service%></label>
-		<div class="cbi-value-field"><span id="ssrpwatch_state">…</span></div>
-	</div>
+		<div class="cbi-value">
+			<label class="cbi-value-title"><%:Record%></label>
+			<div class="cbi-value-field"><span id="ssrpwatch_recent">…</span></div>
+		</div>
 
-	<div class="cbi-value">
-		<label class="cbi-value-title"><%:Record%></label>
-		<div class="cbi-value-field"><span id="ssrpwatch_recent">…</span></div>
-	</div>
+		<div class="cbi-value">
+			<label class="cbi-value-title"><%:Recent events%></label>
+			<div class="cbi-value-field">
+				<textarea id="ssrpwatch_history" readonly="readonly" rows="8"
+					style="width:100%;font-family:monospace"></textarea>
+				<div class="cbi-value-description">
+					<%:Kept on flash at /etc/ssrp-watch.history and preserved across sysupgrade, so it outlives the reboot that so often follows an outage. The verbose snapshots live in /tmp/ssrp-incident.log and do not.%>
+				</div>
+			</div>
+		</div>
 
-	<div class="cbi-value">
-		<label class="cbi-value-title"><%:Recent events%></label>
-		<div class="cbi-value-field">
-			<textarea id="ssrpwatch_history" readonly="readonly" rows="8"
-				style="width:100%;font-family:monospace"></textarea>
-			<div class="cbi-value-description">
-				<%:Kept on flash at /etc/ssrp-watch.history and preserved across sysupgrade, so it outlives the reboot that so often follows an outage. The verbose snapshots live in /tmp/ssrp-incident.log and do not.%>
+		<div class="cbi-value cbi-value-last">
+			<label class="cbi-value-title"><%:Self-test%></label>
+			<div class="cbi-value-field">
+				<input type="button" class="cbi-button cbi-button-apply"
+					value="<%:Capture a snapshot now%>" onclick="runTest(this)" />
+				<div class="cbi-value-description">
+					<%:Takes the same snapshot an incident would, without touching the incident log or the state file. Safe to run while the daemon is live.%>
+				</div>
+				<textarea id="ssrpwatch_test" readonly="readonly" rows="20"
+					style="width:100%;font-family:monospace;display:none"></textarea>
 			</div>
 		</div>
 	</div>
-
-	<div class="cbi-value cbi-value-last">
-		<label class="cbi-value-title"><%:Self-test%></label>
-		<div class="cbi-value-field">
-			<input type="button" class="cbi-button cbi-button-apply"
-				value="<%:Capture a snapshot now%>" onclick="runTest(this)" />
-			<div class="cbi-value-description">
-				<%:Takes the same snapshot an incident would, without touching the incident log or the state file. Safe to run while the daemon is live.%>
-			</div>
-			<textarea id="ssrpwatch_test" readonly="readonly" rows="20"
-				style="width:100%;font-family:monospace;display:none"></textarea>
-		</div>
-	</div>
-</fieldset>
+</div>
