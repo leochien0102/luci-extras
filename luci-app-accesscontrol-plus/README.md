@@ -50,7 +50,7 @@ fw3 用 `-m time --kerneltz`，由内核按设备时区实时判断；fw4 的 nf
 
 以下项无法在开发环境静态验证，需在装有 firewall4 的固件上实测后再发布：
 
-- **T1**：`/etc/init.d/miaplus status` 的返回码。LuCI 状态灯依据返回码（非 stdout）判断，需确认非 procd 脚本下 `EXTRA_COMMANDS=status` 能正确把 `status` 路由到自定义 `status()` 并返回 0/非 0。
+- ~~**T1**：`/etc/init.d/miaplus status` 的返回码。~~ **已实测通过**（2026-09-04，H28K 与 x86 两台 fw4 固件）：非 procd 脚本下 `EXTRA_COMMANDS=status` 能正确把 `status` 路由到自定义 `status()`，运行/停止两种状态分别返回 0 与非 0，LuCI 状态灯随之切换。
 - **T2**：`/etc/init.d/firewall reload` 后 `inet miaplus` 表是否只保留一份、规则条数不翻倍（确认 include 触发 restart 且无重复添加）。
 - 另：`nft list table inet miaplus` 核对生成的时段/星期/`meta nfproto ipv4` 规则是否符合预期；DNS(53) 重定向与 fw4 主表 NAT 是否互抢（见 init.d 表头注释）。
 
