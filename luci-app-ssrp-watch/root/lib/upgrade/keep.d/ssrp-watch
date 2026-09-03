@@ -1,0 +1,3 @@
+# The incident history is the whole point of keeping a record on flash:
+# it has to survive the reflash, not just the reboot.
+/etc/ssrp-watch.history

@@ -1,0 +1,442 @@
+#!/bin/sh
+#
+# ssrp-watch - forensic capture for ssr-plus tunnel outages
+#
+# Probes whether the tunnel is usable. On the transition from working to
+# broken it writes a snapshot to $LOG; on recovery it appends RECOVERED
+# with the outage duration. Either transition also appends one line to
+# $HISTORY, which lives on flash and therefore survives a reboot.
+#
+# Everything below was corrected against a real OpenWrt/busybox target
+# after the 2026-08-28 incident. The traps, in the order they bit:
+#
+#   1. The proxy process is NOT called xray. ln_start_bin symlinks the
+#      binary into /var/etc/ssrplus/bin/ under a fixed name -- xray-core
+#      runs as "v2ray", mihomo as "ssr-retcp". Matching on "xray" finds
+#      nothing and reports a healthy client as dead, which is exactly what
+#      the first capture did. Match on the bin directory instead, never on
+#      a product name.
+#
+#   2. The node is configured by HOSTNAME in UCI, while ss and
+#      /proc/net/nf_conntrack only ever show addresses. Grepping for the
+#      hostname always yields 0. Resolve first; the persistence header
+#      already carries the address the bypass rule was built from, so
+#      prefer that -- it is what the client actually dials.
+#
+#   3. busybox nc here is the minimal build: "Usage: nc [IPADDR PORT]",
+#      no -w, no -z. Any nc -w invocation fails with a usage error, so a
+#      probe built on it reports DOWN unconditionally. Not used at all.
+#
+#   4. The node is on Azure and its NSG drops ICMP, so pinging it is
+#      always 100% loss and measures nothing. Ping the default gateway
+#      instead: congestion on the local uplink is what that would show.
+#
+#   5. The trigger is a cache-defeating DNS query through the tunnel. A
+#      plain lookup of a popular name is answered from the dnsmasq cache
+#      and looks healthy during a total outage -- the first capture was
+#      fooled exactly that way. A random label forces a real round trip,
+#      and NXDOMAIN coming back proves the whole path worked.
+#
+#   6. Liveness checks are useless as a trigger. During the incident the
+#      client was alive and opening dozens of connections per second;
+#      its ClientHello simply never reached the far end. What separates
+#      "trying and failing" from "idle" is the SYN_SENT count to the
+#      node, so that is recorded rather than process state.
+#
+#   7. busybox ping rejects a fractional -i.
+#
+# Usage:
+#   ssrp-watch        one check, then exit          (cron)
+#   ssrp-watch -d     loop every $interval seconds  (procd, preferred)
+#   ssrp-watch -t     capture once and exit, no fault logic (self-test)
+#
+
+# ---------------------------------------------------------------- paths
+#
+# Deliberately not configurable. These are ssr-plus internals, not user
+# knobs: exposing them in UCI only invites a broken value that produces a
+# silently useless capture. If ssr-plus moves them, this file changes.
+LOG="/tmp/ssrp-incident.log"
+STATE="/tmp/.ssrp-watch.state"
+LOCK="/tmp/.ssrp-watch.pid"
+XRAY_LOG="/var/log/ssrplus-error.log"
+BIN_DIR="/var/etc/ssrplus/bin"
+PERSIST="/usr/share/nftables.d/ruleset-post/99-shadowsocksr.nft"
+
+# One line per state change, on flash. The verbose snapshot stays in tmpfs
+# where high-frequency writes belong and a reboot is allowed to clear it;
+# this file answers "has this been happening?" after the reboot that so
+# often follows an outage. Incidents are sparse, so the flash cost is a
+# few dozen bytes per event. Listed in /lib/upgrade/keep.d so it also
+# survives sysupgrade.
+HISTORY="/etc/ssrp-watch.history"
+HISTORY_MAX=65536
+
+# ---------------------------------------------------------------- config
+
+_uci() { uci -q get "ssrp-watch.config.$1" 2>/dev/null; }
+
+INTERVAL=$(_uci interval)
+FAIL_THRESHOLD=$(_uci fail_threshold)
+RECAPTURE_SEC=$(_uci recapture)
+LOG_MAX=$(_uci log_max)
+PROBE_DOMAIN=$(_uci probe_domain)
+PROBE_CN=$(_uci probe_cn)
+PROBE_INTL=$(_uci probe_intl)
+
+: "${INTERVAL:=15}"             # seconds between checks in -d mode
+: "${FAIL_THRESHOLD:=2}"        # consecutive failures before declaring an incident
+: "${RECAPTURE_SEC:=300}"       # re-snapshot interval while still down
+: "${LOG_MAX:=524288}"          # rotate above this size (tmpfs - do not eat RAM)
+
+# Must be in gfw_list.conf, i.e. routed through dns2tcp and therefore
+# through the tunnel.
+: "${PROBE_DOMAIN:=google.com}"
+
+# Two unproxied ICMP targets, one either side of the international egress.
+# Comparing them is what separates "the whole uplink is broken" from "only
+# the overseas path is", which is the distinction that matters here: the
+# same node works from another location, so the fault is this site's route
+# out, not the node.
+#
+# Neither is proxied -- the ss_spec rules match tcp/udp only, so ICMP goes
+# out the same way regardless. 114.114.114.114 was the original choice and
+# was a bad one: it answers in 0 ms from this network, i.e. something on
+# the path replies for it, so it measures nothing beyond the gateway.
+: "${PROBE_CN:=223.5.5.5}"      # domestic, ~5 ms from here
+: "${PROBE_INTL:=1.1.1.1}"      # overseas; in WAN_FW_IP, but that only
+                                # affects tcp/udp, so ICMP still takes the
+                                # direct route
+
+# ---------------------------------------------------------------- helpers
+
+now()  { date '+%Y-%m-%d %H:%M:%S'; }
+say()  { echo "$*" >> "$LOG"; }
+
+# Append one line to the persistent record, oldest-trimmed rather than
+# rotated: a second file on flash for something this small is not worth it.
+hist() {
+    echo "$(now)  $*" >> "$HISTORY" 2>/dev/null || return 0
+    [ "$(wc -c < "$HISTORY" 2>/dev/null || echo 0)" -gt "$HISTORY_MAX" ] || return 0
+    tail -200 "$HISTORY" > "$HISTORY.tmp" 2>/dev/null && mv "$HISTORY.tmp" "$HISTORY"
+}
+
+# Single instance. Two copies running at once interleave their writes into
+# $LOG line by line, which is how the 2026-08-28 16:06 capture ended up cut
+# in half by the next one and unreadable. A stale pid file is ignored --
+# /proc/<pid> is the liveness test, so a killed instance does not block the
+# next start.
+acquire_lock() {
+    if [ -f "$LOCK" ]; then
+        old=$(cat "$LOCK" 2>/dev/null)
+        if [ -n "$old" ] && [ "$old" != "$$" ] && [ -d "/proc/$old" ]; then
+            echo "ssrp-watch: already running as pid $old" >&2
+            return 1
+        fi
+    fi
+    echo $$ > "$LOCK"
+    # INT/TERM have to exit explicitly: without that the handler returns and
+    # the loop just carries on, so the process would ignore a stop request.
+    trap 'rm -f "$LOCK"; exit 0' INT TERM
+    trap 'rm -f "$LOCK"' EXIT
+    return 0
+}
+
+rotate() {
+    [ -f "$LOG" ] || return 0
+    [ "$(wc -c < "$LOG")" -gt "$LOG_MAX" ] || return 0
+    mv "$LOG" "$LOG.1"
+    : > "$LOG"
+}
+
+# NODE_HOST is what the config says, NODE_IP is what the client dials.
+# They are different things here and both are worth recording.
+load_node() {
+    NODE_HOST=""
+    NODE_PORT=""
+    NODE_IP=""
+
+    GS="$(uci -q get shadowsocksr.@global[0].global_server)"
+    if [ -n "$GS" ] && [ "$GS" != "nil" ]; then
+        NODE_HOST="$(uci -q get "shadowsocksr.$GS.server")"
+        NODE_PORT="$(uci -q get "shadowsocksr.$GS.server_port")"
+    fi
+
+    # The persistence header records the address ssr-rules built the
+    # bypass rule from, which is precisely the one the client connects
+    # to. Preferred over re-resolving, which could return a different
+    # address and send the whole diagnosis chasing the wrong flow.
+    NODE_IP="$(sed -n 's/^# Server: \([0-9.]*\).*/\1/p' "$PERSIST" 2>/dev/null | head -1)"
+
+    if [ -z "$NODE_IP" ] && [ -n "$NODE_HOST" ]; then
+        NODE_IP="$(nslookup "$NODE_HOST" 2>/dev/null \
+            | awk '/^Address/ {a=$NF} END {print a}' | sed 's/.*[: ]//')"
+    fi
+}
+
+# ---------------------------------------------------------------- probe
+
+# 0 = tunnel usable, 1 = not.
+#
+# A random label under a gfw-listed domain cannot be served from cache,
+# so any answer at all -- records or NXDOMAIN -- proves the query went
+# dnsmasq -> dns2tcp -> tunnel -> upstream and came back. Silence or a
+# timeout is the fault condition.
+probe_tunnel() {
+    nslookup "p$(date +%s)x.$PROBE_DOMAIN" 127.0.0.1 2>&1 \
+        | grep -qE 'NXDOMAIN|^Address|^Name'
+}
+
+# ---------------------------------------------------------------- snapshot
+
+snap_link() {
+    say "--- link (congestion vs conntrack: measurable only right now) ---"
+
+    G=$(ip route show default 2>/dev/null | awk '{print $3; exit}')
+    D=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
+
+    # Two targets, because one is not enough to place the fault.
+    #
+    # The gateway is one hop away, on the LAN. Pinging it says nothing about
+    # the shared uplink BEYOND it -- which is the segment that matters here,
+    # and which the first version of this script could not see at all. Five
+    # outages on 2026-08-28 all showed a perfectly clean gateway ping while
+    # the node was logging thousands of "failed to read client hello", i.e.
+    # handshakes completing but the first data packet never arriving.
+    #
+    # Neither probe target is proxied: the ss_spec rules match tcp/udp only,
+    # so ICMP takes the direct route and measures the same egress the tunnel
+    # leaves by. Loss there with a clean gateway puts the fault past the
+    # gateway rather than on the LAN.
+    #
+    # The node itself is on Azure, whose NSG drops ICMP, so pinging it only
+    # ever reports 100% loss and measures nothing.
+    if [ -n "$G" ]; then
+        say "  ping gateway $G (LAN segment):"
+        ping -c 10 -W 2 "$G" 2>&1 | tail -2 | sed 's/^/    /' >> "$LOG"
+    fi
+    say "  ping $PROBE_CN (domestic, past the gateway):"
+    ping -c 10 -W 2 "$PROBE_CN" 2>&1 | tail -2 | sed 's/^/    /' >> "$LOG"
+    say "  ping $PROBE_INTL (overseas):"
+    ping -c 10 -W 2 "$PROBE_INTL" 2>&1 | tail -2 | sed 's/^/    /' >> "$LOG"
+    say "  -> gateway ok + domestic ok + overseas lossy = the international"
+    say "     egress is the fault, and nothing on this router can fix it"
+    say "  -> gateway ok + domestic lossy = the site's uplink as a whole"
+
+    if [ -r /proc/sys/net/netfilter/nf_conntrack_count ]; then
+        cnt=$(cat /proc/sys/net/netfilter/nf_conntrack_count)
+        max=$(cat /proc/sys/net/netfilter/nf_conntrack_max)
+        [ "$max" -gt 0 ] 2>/dev/null || max=1
+        say "  conntrack: $cnt / $max  ($(( cnt * 100 / max ))%)"
+        if [ -r /proc/net/nf_conntrack ] && [ -n "$NODE_IP" ]; then
+            tot=$(grep -c "$NODE_IP" /proc/net/nf_conntrack 2>/dev/null)
+            syn=$(grep "$NODE_IP" /proc/net/nf_conntrack 2>/dev/null | grep -c SYN_SENT)
+            say "  conntrack entries to node: $tot  (SYN_SENT: $syn)"
+            say "  -> a high SYN_SENT share is the signature of the client"
+            say "     connecting but its ClientHello never arriving"
+        fi
+        say "  SYN_SENT total: $(grep -c 'SYN_SENT' /proc/net/nf_conntrack 2>/dev/null)"
+    else
+        say "  conntrack: not readable"
+    fi
+
+    if [ -n "$D" ]; then
+        _b() { awk -v d="$D:" '$1==d {print $2, $10}' /proc/net/dev; }
+        set -- $(_b); r1=$1; t1=$2
+        sleep 2
+        set -- $(_b); r2=$1; t2=$2
+        if [ -n "$r1" ] && [ -n "$r2" ]; then
+            say "  WAN($D)  rx $(( (r2-r1)/2048 )) KB/s   tx $(( (t2-t1)/2048 )) KB/s"
+            say "           (a saturated 100M line is about 12000 KB/s)"
+        fi
+    fi
+
+    say "  loadavg: $(cat /proc/loadavg)"
+}
+
+snap_proxy() {
+    say "--- ssr-plus processes ---"
+    # Match the bin directory, never a product name: xray-core runs as
+    # "v2ray" here and mihomo as "ssr-retcp", because those are the
+    # symlinks ln_start_bin creates.
+    found=0
+    up=$(cut -d. -f1 /proc/uptime)
+    for p in $(ls /proc 2>/dev/null | grep '^[0-9]*$'); do
+        [ -r "/proc/$p/cmdline" ] || continue
+        cl=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+        case "$cl" in
+        *"$BIN_DIR"*)
+            found=1
+            st=$(awk '{print int($22/100)}' "/proc/$p/stat" 2>/dev/null)
+            say "  pid=$p up $(( up - st ))s  $(echo "$cl" | cut -c1-70)"
+            ;;
+        esac
+    done
+    [ "$found" = 1 ] || say "  !! nothing running out of $BIN_DIR"
+
+    say "--- connections to node ---"
+    # Counted out of conntrack rather than ss. The ss on this target does
+    # not accept "-H" / "state established" and silently produces nothing,
+    # which reads as zero established connections while conntrack is
+    # showing two dozen. conntrack is already parsed above and is the
+    # same data source, so there is no reason to depend on ss dialect.
+    if [ -n "$NODE_IP" ] && [ -r /proc/net/nf_conntrack ]; then
+        est=$(grep "$NODE_IP" /proc/net/nf_conntrack 2>/dev/null | grep -c ESTABLISHED)
+        say "  established to $NODE_IP ($NODE_HOST:$NODE_PORT): $est"
+    else
+        say "  node address unknown or conntrack unreadable"
+    fi
+
+    say "--- xray client errors (last 25 lines) ---"
+    if [ -s "$XRAY_LOG" ]; then
+        tail -25 "$XRAY_LOG" | sed 's/^/  /' >> "$LOG"
+        say "  (xray timestamps are UTC, 8 hours behind local CST)"
+    else
+        say "  (no log - check that log.error is enabled in gen_config.lua)"
+    fi
+}
+
+# Who is generating the connections.
+#
+# Added after the 2026-08-28 evening incidents, where conntrack entries to
+# the node reached 3278 while only 92 were established -- i.e. thousands of
+# TIME_WAIT/FIN_WAIT remnants from very high connection churn -- and WAN tx
+# ran three times WAN rx and climbing (961 KB/s up against 292 KB/s down).
+# Lots of short connections plus an upstream-heavy profile is what seeding
+# looks like, and 192.168.5.10 runs in game mode with every UDP port
+# relayed, so its P2P traffic goes through the tunnel. Naming the host at
+# the time of the fault is the one thing the earlier captures could not do.
+snap_lan() {
+    say "--- LAN talkers (who is generating the connections) ---"
+    if [ ! -r /proc/net/nf_conntrack ]; then
+        say "  conntrack not readable"
+        return 0
+    fi
+
+    net=$(ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2; exit}' | cut -d/ -f1 | cut -d. -f1-3)
+    [ -n "$net" ] || net="192.168.5"
+
+    say "  connections per LAN host:"
+    grep -oE "src=$net\.[0-9]+" /proc/net/nf_conntrack 2>/dev/null \
+        | sed 's/src=//' | sort | uniq -c | sort -rn | head -8 | sed 's/^/    /' >> "$LOG"
+
+    top=$(grep -oE "src=$net\.[0-9]+" /proc/net/nf_conntrack 2>/dev/null \
+        | sed 's/src=//' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+    [ -n "$top" ] || return 0
+
+    say "  top talker $top -- destination ports:"
+    grep "src=$top " /proc/net/nf_conntrack 2>/dev/null \
+        | grep -oE 'dport=[0-9]+' | sed 's/dport=//' | sort | uniq -c | sort -rn \
+        | head -10 | sed 's/^/    /' >> "$LOG"
+    say "  distinct destination ports: $(grep "src=$top " /proc/net/nf_conntrack 2>/dev/null | grep -oE 'dport=[0-9]+' | sort -u | wc -l)"
+    say "  -> a few ports (443/80) is ordinary browsing; hundreds of scattered"
+    say "     high ports is P2P"
+}
+
+snap_dns() {
+    say "--- DNS ---"
+    say "  domestic (www.qq.com):"
+    nslookup www.qq.com 127.0.0.1 2>&1 | grep -E '^Address|^Name' | tail -3 | sed 's/^/    /' >> "$LOG"
+    say "  through tunnel (random label, cache-defeating):"
+    nslookup "p$(date +%s)x.$PROBE_DOMAIN" 127.0.0.1 2>&1 | tail -3 | sed 's/^/    /' >> "$LOG"
+    say "  -> NXDOMAIN here is SUCCESS: it proves a full round trip"
+    say "  dnsmasq takeover: $(ls /tmp/dnsmasq.d/ 2>/dev/null | tr '\n' ' ')"
+}
+
+snap_rules() {
+    say "--- firewall rules ---"
+    say "  ss_spec rule lines: $(nft list ruleset 2>/dev/null | grep -c ss_spec)"
+    if [ -f "$PERSIST" ]; then
+        say "  persistence: $(ls -l "$PERSIST" | awk '{print $5" bytes  "$6" "$7" "$8}')"
+        say "  $(grep -m1 '^# Server:' "$PERSIST")"
+    else
+        say "  !! persistence file missing"
+    fi
+    say "  policy routing: $(ip rule show 2>/dev/null | grep -c 'lookup 999') rule(s)"
+}
+
+capture() {
+    rotate
+    say ""
+    say "################ $1 $(now) ################"
+    case "$1" in
+    TEST) say "manual snapshot, no fault detected" ;;
+    *)    say "trigger: tunnel DNS probe failed $FAIL_THRESHOLD times in a row" ;;
+    esac
+
+    snap_link
+    snap_proxy
+    snap_lan
+    snap_dns
+    snap_rules
+    say ""
+}
+
+# ---------------------------------------------------------------- main
+
+check_once() {
+    load_node
+
+    fails=0; since=0; lastcap=0
+    [ -f "$STATE" ] && read -r fails since lastcap < "$STATE" 2>/dev/null
+    [ -n "$fails" ]   || fails=0
+    [ -n "$since" ]   || since=0
+    [ -n "$lastcap" ] || lastcap=0
+
+    if probe_tunnel; then
+        if [ "$since" -ne 0 ]; then
+            dur=$(( $(date +%s) - since ))
+            say "###### RECOVERED $(now)  outage lasted ${dur}s ######"
+            say ""
+            hist "RECOVERED  outage lasted ${dur}s"
+        fi
+        echo "0 0 0" > "$STATE"
+        return 0
+    fi
+
+    fails=$(( fails + 1 ))
+    t=$(date +%s)
+
+    if [ "$fails" -ge "$FAIL_THRESHOLD" ] && [ "$since" -eq 0 ]; then
+        since=$t
+        lastcap=$t
+        capture "INCIDENT"
+        hist "INCIDENT   probe failed ${FAIL_THRESHOLD}x  node=${NODE_IP:-unknown}"
+    elif [ "$since" -ne 0 ] && [ $(( t - lastcap )) -ge "$RECAPTURE_SEC" ]; then
+        lastcap=$t
+        capture "STILL DOWN ($(( t - since ))s)"
+    fi
+
+    echo "$fails $since $lastcap" > "$STATE"
+    return 1
+}
+
+case "$1" in
+-d)
+    acquire_lock || exit 1
+    while :; do
+        check_once
+        # Backgrounded sleep plus wait, not a plain sleep: a foreground
+        # child makes the shell defer every trap until it returns, so a
+        # stop request would sit unhandled for a whole interval and the
+        # lock file would outlive the process.
+        sleep "$INTERVAL" &
+        wait $!
+    done
+    ;;
+-t)
+    # Manual snapshot: write to a scratch file and print that, instead of
+    # appending to the incident log. Keeps self-tests out of the record, and
+    # lets -t run while the daemon is live without either of them taking the
+    # lock or interleaving into the same file.
+    LOG="/tmp/ssrp-watch-test.$$"
+    load_node
+    capture "TEST"
+    cat "$LOG"
+    rm -f "$LOG"
+    ;;
+*)
+    acquire_lock || exit 0
+    check_once
+    ;;
+esac

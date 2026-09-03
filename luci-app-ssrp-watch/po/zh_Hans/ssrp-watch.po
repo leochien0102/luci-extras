@@ -1,0 +1,110 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_Hans\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Tunnel Watchdog"
+msgstr "隧道看守"
+
+msgid "Probes whether the tunnel actually carries traffic, and captures a forensic snapshot at the moment it stops. The probe is a random-label DNS query through the tunnel: a cached answer cannot satisfy it, so a reply proves the whole path worked."
+msgstr "探测隧道是否真的在过流量，并在它停止的那一刻抓取现场快照。探针是一条经隧道发出的随机标签 DNS 查询：缓存无法应答它，所以只要有回应就证明整条链路是通的。"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Runs as a procd service, restarted automatically if it dies."
+msgstr "以 procd 服务运行，异常退出会自动拉起。"
+
+msgid "Check interval (s)"
+msgstr "检查间隔（秒）"
+
+msgid "Failures before an incident"
+msgstr "判定为事故所需的连续失败次数"
+
+msgid "Consecutive failed probes required before a snapshot is taken. Two at fifteen seconds means a fault has to persist for half a minute, which keeps a single dropped query out of the record."
+msgstr "抓快照前需要连续失败几次。间隔 15 秒时取 2 次，意味着故障须持续半分钟，可以把偶发的单次丢包挡在记录之外。"
+
+msgid "Re-snapshot interval (s)"
+msgstr "持续故障时的重复抓取间隔（秒）"
+
+msgid "While still down, take another snapshot this often."
+msgstr "故障尚未恢复时，每隔这么久再抓一次。"
+
+msgid "Incident log size cap (bytes)"
+msgstr "事故日志大小上限（字节）"
+
+msgid "The verbose log lives in /tmp, which is RAM. It rotates once above this size."
+msgstr "详细日志在 /tmp，也就是内存里。超过这个大小就轮转一次。"
+
+msgid "Probe domain"
+msgstr "探测域名"
+
+msgid "Must be a domain that is routed through the tunnel, i.e. one in gfw_list.conf. A domestic domain would resolve fine during a total outage and the probe would never fire."
+msgstr "必须是走隧道的域名，即在 gfw_list.conf 里的。用国内域名的话，即使隧道完全中断它也能正常解析，探针永远不会触发。"
+
+msgid "Domestic ICMP target"
+msgstr "国内 ICMP 目标"
+
+msgid "Pinged unproxied. Together with the overseas target this is what separates a broken uplink from a broken international route. Avoid 114.114.114.114: something on the path answers for it in 0 ms, so it measures nothing beyond the gateway."
+msgstr "不走代理直接 ping。它和境外目标对照，才能区分「整条上行断了」和「只有国际出口断了」。不要用 114.114.114.114：路径上有设备替它 0 毫秒应答，测不到网关以外的任何东西。"
+
+msgid "Overseas ICMP target"
+msgstr "境外 ICMP 目标"
+
+msgid "Pinged unproxied. Loss here with a clean domestic target puts the fault on the international egress, which nothing on this router can fix."
+msgstr "不走代理直接 ping。国内目标干净而这里丢包，说明故障在国际出口上——那是路由器这边修不了的。"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Enabled but not running"
+msgstr "已启用但未在运行"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "incident(s) in the last 7 days"
+msgstr "次事故（近 7 天）"
+
+msgid "recorded in total"
+msgstr "条记录（累计）"
+
+msgid "No incident has been recorded yet."
+msgstr "尚未记录到任何事故。"
+
+msgid "Capturing, about 40 seconds..."
+msgstr "抓取中，约需 40 秒……"
+
+msgid "Pinging three targets ten times each and sampling the WAN counters. Please wait."
+msgstr "正在对三个目标各 ping 十次，并采样 WAN 计数器，请稍候。"
+
+msgid "No output."
+msgstr "无输出。"
+
+msgid "Capture a snapshot now"
+msgstr "立即抓取快照"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Service"
+msgstr "服务"
+
+msgid "Record"
+msgstr "记录"
+
+msgid "Recent events"
+msgstr "最近事件"
+
+msgid "Kept on flash at /etc/ssrp-watch.history and preserved across sysupgrade, so it outlives the reboot that so often follows an outage. The verbose snapshots live in /tmp/ssrp-incident.log and do not."
+msgstr "保存在 flash 上的 /etc/ssrp-watch.history，并在 sysupgrade 时保留——事故之后往往紧跟一次重启，它要能活过去。详细快照在 /tmp/ssrp-incident.log，重启即失。"
+
+msgid "Self-test"
+msgstr "自检"
+
+msgid "Takes the same snapshot an incident would, without touching the incident log or the state file. Safe to run while the daemon is live."
+msgstr "抓取与事故时完全相同的快照，但不会写入事故日志或状态文件。守护进程运行期间也可以安全执行。"

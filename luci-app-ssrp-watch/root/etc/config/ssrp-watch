@@ -1,0 +1,13 @@
+
+config ssrp-watch 'config'
+	# Ships disabled. A daemon that sends probe traffic every few seconds
+	# should start because someone asked for it, not because a package
+	# landed on the system.
+	option enabled '0'
+	option interval '15'
+	option fail_threshold '2'
+	option recapture '300'
+	option log_max '524288'
+	option probe_domain 'google.com'
+	option probe_cn '223.5.5.5'
+	option probe_intl '1.1.1.1'

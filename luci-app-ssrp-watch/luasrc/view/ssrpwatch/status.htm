@@ -1,0 +1,91 @@
+<script type="text/javascript">//<![CDATA[
+	function fmtStatus(st) {
+		var s = document.getElementById('ssrpwatch_state');
+		if (!s) return;
+		if (st.running)
+			s.innerHTML = '<span style="color:green;font-weight:bold">'
+				+ '<%:Running%> (pid ' + st.pid + ')</span>';
+		else if (st.enabled)
+			s.innerHTML = '<span style="color:red;font-weight:bold"><%:Enabled but not running%></span>';
+		else
+			s.innerHTML = '<span style="color:#888"><%:Stopped%></span>';
+
+		var r = document.getElementById('ssrpwatch_recent');
+		if (r)
+			r.innerHTML = String(st.recent) + ' <%:incident(s) in the last 7 days%>'
+				+ ' &#160;&#183;&#160; ' + String(st.total) + ' <%:recorded in total%>';
+
+		var h = document.getElementById('ssrpwatch_history');
+		if (h) {
+			if (st.history && st.history.length)
+				h.value = st.history.join('\n');
+			else
+				h.value = '<%:No incident has been recorded yet.%>';
+		}
+	}
+
+	function pollStatus() {
+		XHR.get('<%=luci.dispatcher.build_url("admin/services/shadowsocksr/watch_status")%>', null,
+			function(x, st) { if (st) fmtStatus(st); });
+	}
+
+	function runTest(btn) {
+		var out = document.getElementById('ssrpwatch_test');
+		btn.disabled = true;
+		btn.value = '<%:Capturing, about 40 seconds...%>';
+		out.style.display = 'block';
+		out.value = '<%:Pinging three targets ten times each and sampling the WAN counters. Please wait.%>';
+		XHR.get('<%=luci.dispatcher.build_url("admin/services/shadowsocksr/watch_test")%>', null,
+			function(x) {
+				out.value = x.responseText || '<%:No output.%>';
+				btn.disabled = false;
+				btn.value = '<%:Capture a snapshot now%>';
+			});
+	}
+
+	window.addEventListener('load', function() {
+		pollStatus();
+		// The daemon only changes state on a fault, so a slow poll is
+		// plenty; a fast one would just burn a request every second to
+		// watch a value that moves a few times a week.
+		window.setInterval(pollStatus, 15000);
+	});
+//]]></script>
+
+<fieldset class="cbi-section">
+	<legend><%:Status%></legend>
+
+	<div class="cbi-value">
+		<label class="cbi-value-title"><%:Service%></label>
+		<div class="cbi-value-field"><span id="ssrpwatch_state">…</span></div>
+	</div>
+
+	<div class="cbi-value">
+		<label class="cbi-value-title"><%:Record%></label>
+		<div class="cbi-value-field"><span id="ssrpwatch_recent">…</span></div>
+	</div>
+
+	<div class="cbi-value">
+		<label class="cbi-value-title"><%:Recent events%></label>
+		<div class="cbi-value-field">
+			<textarea id="ssrpwatch_history" readonly="readonly" rows="8"
+				style="width:100%;font-family:monospace"></textarea>
+			<div class="cbi-value-description">
+				<%:Kept on flash at /etc/ssrp-watch.history and preserved across sysupgrade, so it outlives the reboot that so often follows an outage. The verbose snapshots live in /tmp/ssrp-incident.log and do not.%>
+			</div>
+		</div>
+	</div>
+
+	<div class="cbi-value cbi-value-last">
+		<label class="cbi-value-title"><%:Self-test%></label>
+		<div class="cbi-value-field">
+			<input type="button" class="cbi-button cbi-button-apply"
+				value="<%:Capture a snapshot now%>" onclick="runTest(this)" />
+			<div class="cbi-value-description">
+				<%:Takes the same snapshot an incident would, without touching the incident log or the state file. Safe to run while the daemon is live.%>
+			</div>
+			<textarea id="ssrpwatch_test" readonly="readonly" rows="20"
+				style="width:100%;font-family:monospace;display:none"></textarea>
+		</div>
+	</div>
+</fieldset>

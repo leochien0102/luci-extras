@@ -1,0 +1,11 @@
+{
+	"luci-app-ssrp-watch": {
+		"description": "Grant UCI access for luci-app-ssrp-watch",
+		"read": {
+			"uci": [ "ssrp-watch" ]
+		},
+		"write": {
+			"uci": [ "ssrp-watch" ]
+		}
+	}
+}
