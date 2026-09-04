@@ -29,6 +29,44 @@
 			function(x, st) { if (st) fmtStatus(st); });
 	}
 
+	function clearHistory(btn) {
+		if (!confirm('<%:Discard every recorded event? The record on flash is erased and cannot be recovered.%>'))
+			return;
+
+		var label = btn.value;
+		btn.disabled = true;
+		btn.value = '<%:Clearing...%>';
+
+		// LuCI's XHR.post drops the callback when the request is rejected
+		// rather than answered -- its poll() wrapper carries no .catch() --
+		// so the button would sit disabled forever on a timeout. Settle once,
+		// from whichever of the callback or the guard arrives first.
+		var done = false;
+		var finish = function(msg) {
+			if (done) return;
+			done = true;
+			btn.disabled = false;
+			btn.value = label;
+			if (msg) alert(msg);
+			pollStatus();
+		};
+		var guard = window.setTimeout(function() {
+			finish('<%:The request timed out. The record may or may not have been cleared -- reload the page to see.%>');
+		}, 10000);
+
+		var p = XHR.post('<%=luci.dispatcher.build_url("admin/services/shadowsocksr/watch_clear")%>', null,
+			function(x, res) {
+				window.clearTimeout(guard);
+				finish((res && res.ret === 0) ? null
+					: '<%:Could not clear the record. Check that /etc/ssrp-watch.history is writable.%>');
+			});
+		if (p && typeof p.catch === 'function')
+			p.catch(function() {
+				window.clearTimeout(guard);
+				finish('<%:Could not clear the record. Check that /etc/ssrp-watch.history is writable.%>');
+			});
+	}
+
 	function runTest(btn) {
 		var out = document.getElementById('ssrpwatch_test');
 		btn.disabled = true;
@@ -77,6 +115,12 @@
 					style="width:100%;font-family:monospace"></textarea>
 				<div class="cbi-value-description">
 					<%:Kept on flash at /etc/ssrp-watch.history and preserved across sysupgrade, so it outlives the reboot that so often follows an outage. The verbose snapshots live in /tmp/ssrp-incident.log and do not.%>
+				</div>
+				<input type="button" class="cbi-button cbi-button-reset"
+					style="margin-top:.5em"
+					value="<%:Clear the record%>" onclick="clearHistory(this)" />
+				<div class="cbi-value-description">
+					<%:Empties both the record on flash and the verbose snapshots. Restarting the tunnel logs an outage like any other, so a run of maintenance leaves entries worth discarding.%>
 				</div>
 			</div>
 		</div>

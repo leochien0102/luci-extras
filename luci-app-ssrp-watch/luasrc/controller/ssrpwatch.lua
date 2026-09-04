@@ -23,9 +23,11 @@ function index()
 	-- menu.
 	entry({"admin", "services", "shadowsocksr", "watch_status"}, call("act_status")).leaf = true
 	entry({"admin", "services", "shadowsocksr", "watch_test"}, call("act_test")).leaf = true
+	entry({"admin", "services", "shadowsocksr", "watch_clear"}, post("act_clear")).leaf = true
 end
 
 local HISTORY = "/etc/ssrp-watch.history"
+local INCIDENT_LOG = "/tmp/ssrp-incident.log"
 local LOCK    = "/tmp/.ssrp-watch.pid"
 
 -- The daemon maintains the pid file itself and clears it on exit, so it is
@@ -78,6 +80,39 @@ function act_status()
 			end
 		end
 		fd:close()
+	end
+
+	luci.http.prepare_content("application/json")
+	luci.http.write_json(e)
+end
+
+-- Empties the record. Truncates rather than unlinks so the daemon's own
+-- appends keep landing in the same inode -- it holds no handle open, but a
+-- deleted file would also drop the mode and owner the package installed with.
+-- The verbose snapshots in /tmp go too: they are the long form of the very
+-- entries being discarded, and keeping them would leave the page claiming an
+-- empty history while the log still carries the detail.
+function act_clear()
+	local e = { ret = 0 }
+
+	local fd = io.open(HISTORY, "w")
+	if fd then
+		fd:close()
+	else
+		e.ret = 1
+		e.error = "history"
+	end
+
+	-- Absent is the normal state after a reboot, so only a failed truncate
+	-- of a file that does exist counts against us.
+	if nixio.fs.access(INCIDENT_LOG) then
+		local lg = io.open(INCIDENT_LOG, "w")
+		if lg then
+			lg:close()
+		else
+			e.ret = 1
+			e.error = (e.error and (e.error .. ",log")) or "log"
+		end
 	end
 
 	luci.http.prepare_content("application/json")

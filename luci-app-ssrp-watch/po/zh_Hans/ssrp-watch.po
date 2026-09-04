@@ -108,3 +108,21 @@ msgstr "自检"
 
 msgid "Takes the same snapshot an incident would, without touching the incident log or the state file. Safe to run while the daemon is live."
 msgstr "抓取与事故时完全相同的快照，但不会写入事故日志或状态文件。守护进程运行期间也可以安全执行。"
+
+msgid "Clear the record"
+msgstr "清空记录"
+
+msgid "Empties both the record on flash and the verbose snapshots. Restarting the tunnel logs an outage like any other, so a run of maintenance leaves entries worth discarding."
+msgstr "同时清空 flash 上的记录与详细快照。重启隧道和真实断线一样会被记为一次中断，所以一轮维护之后往往会留下一批没有保留价值的条目。"
+
+msgid "Discard every recorded event? The record on flash is erased and cannot be recovered."
+msgstr "确定丢弃全部已记录事件？flash 上的记录将被清空且无法恢复。"
+
+msgid "Clearing..."
+msgstr "正在清空……"
+
+msgid "Could not clear the record. Check that /etc/ssrp-watch.history is writable."
+msgstr "清空失败。请检查 /etc/ssrp-watch.history 是否可写。"
+
+msgid "The request timed out. The record may or may not have been cleared -- reload the page to see."
+msgstr "请求超时。记录可能已清空也可能未清空——重新加载页面即可确认。"
