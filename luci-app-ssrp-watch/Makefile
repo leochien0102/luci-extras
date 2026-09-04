@@ -15,7 +15,7 @@ LUCI_PKGARCH:=all
 
 PKG_NAME:=luci-app-ssrp-watch
 PKG_VERSION:=1
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 define Package/$(PKG_NAME)/conffiles
 /etc/config/ssrp-watch

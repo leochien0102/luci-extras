@@ -105,7 +105,15 @@
 
 		<div class="cbi-value">
 			<label class="cbi-value-title"><%:Record%></label>
-			<div class="cbi-value-field"><span id="ssrpwatch_recent">…</span></div>
+			<div class="cbi-value-field">
+				<span id="ssrpwatch_recent" style="vertical-align:middle">…</span>
+				<input type="button" class="cbi-button cbi-button-remove"
+					style="margin-left:1em;vertical-align:middle"
+					value="<%:Clear the record%>" onclick="clearHistory(this)" />
+				<div class="cbi-value-description">
+					<%:Empties both the record on flash and the verbose snapshots. Restarting the tunnel logs an outage like any other, so a run of maintenance leaves entries worth discarding.%>
+				</div>
+			</div>
 		</div>
 
 		<div class="cbi-value">
@@ -115,12 +123,6 @@
 					style="width:100%;font-family:monospace"></textarea>
 				<div class="cbi-value-description">
 					<%:Kept on flash at /etc/ssrp-watch.history and preserved across sysupgrade, so it outlives the reboot that so often follows an outage. The verbose snapshots live in /tmp/ssrp-incident.log and do not.%>
-				</div>
-				<input type="button" class="cbi-button cbi-button-remove"
-					style="margin-top:.5em"
-					value="<%:Clear the record%>" onclick="clearHistory(this)" />
-				<div class="cbi-value-description">
-					<%:Empties both the record on flash and the verbose snapshots. Restarting the tunnel logs an outage like any other, so a run of maintenance leaves entries worth discarding.%>
 				</div>
 			</div>
 		</div>
