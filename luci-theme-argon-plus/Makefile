@@ -13,6 +13,8 @@
 
 include $(TOPDIR)/rules.mk
 
+PKG_NAME:=luci-theme-argon-plus
+
 LUCI_TITLE:=Argon Plus - Argon theme with built-in configuration
 LUCI_DEPENDS:=+luci-base +@wget-any +jsonfilter
 

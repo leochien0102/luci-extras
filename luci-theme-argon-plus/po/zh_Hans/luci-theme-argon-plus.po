@@ -218,3 +218,11 @@ msgstr "[亮色模式] 透明度"
 #: applications/luci-app-argon-config/htdocs/luci-static/resources/view/argon-config.js:131
 msgid "valid HEX color value"
 msgstr "有效十六进制颜色值"
+
+#: htdocs/luci-static/resources/argon-plus-settings.js:1
+msgid "Loading settings…"
+msgstr "设置加载中……"
+
+#: htdocs/luci-static/resources/argon-plus-settings.js:2
+msgid "Failed to load the theme settings: %s"
+msgstr "主题设置加载失败：%s"

@@ -58,18 +58,18 @@ function mountSettings() {
 	 * design selector; keep the block below it when present. */
 	const after = section.querySelector('[data-name="_tablefilters"]') || field;
 
-	const wrapper = E('div', { 'id': CONTAINER_ID },
-		E('div', {
-			'style': 'margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid rgba(128,128,128,.25)'
-		}, [
-			E('h4', { 'style': 'margin:0 0 1rem 0; font-size:.95rem; font-weight:600' },
-				_('Argon theme configuration')),
-			E('em', { 'class': 'spinning' }, _('Loading settings…'))
-		]));
+	const title = E('h4', { 'style': 'margin:0 0 1rem 0; font-size:.95rem; font-weight:600' },
+		_('Argon theme configuration'));
+
+	const spinner = E('em', { 'class': 'spinning' }, _('Loading settings…'));
+
+	const body = E('div', {
+		'style': 'margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid rgba(128,128,128,.25)'
+	}, [ title, spinner ]);
+
+	const wrapper = E('div', { 'id': CONTAINER_ID }, body);
 
 	after.insertAdjacentElement('afterend', wrapper);
-
-	const box = wrapper.lastElementChild;
 
 	L.require('view/argon-plus-config').then((viewClass) => {
 		if (gen !== mountGeneration)
@@ -86,12 +86,14 @@ function mountSettings() {
 			if (gen !== mountGeneration)
 				return;
 
-			box.remove();
-			wrapper.appendChild(dom);
+			spinner.remove();
+			body.appendChild(dom);
 		});
 	}).catch((e) => {
-		if (gen === mountGeneration)
-			box.textContent = _('Failed to load the theme settings: %s').format(e.message || e);
+		if (gen === mountGeneration) {
+			spinner.classList.remove('spinning');
+			spinner.textContent = _('Failed to load the theme settings: %s').format(e.message || e);
+		}
 	});
 }
 
@@ -118,7 +120,7 @@ function scheduleSync() {
 }
 
 return baseclass.extend({
-	__init() {
+	__init__() {
 		const observer = new MutationObserver(scheduleSync);
 		observer.observe(document.body, { childList: true, subtree: true });
 
