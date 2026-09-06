@@ -4,7 +4,7 @@
 'require rpc';
 'require uci';
 'require ui';
-'require view';
+'require baseclass';
 
 const callSystemInfo = rpc.declare({
 	object: 'system',
@@ -30,7 +30,7 @@ const bg_path = '/www/luci-static/argon-plus/background/';
 const trans_set = [0, 0.1, 0.2, 0.3, 0.4,
 	0.5, 0.6, 0.7, 0.8, 0.9, 1 ];
 
-return view.extend({
+return baseclass.extend({
 	load() {
 		return Promise.all([
 			uci.load('argon'),
@@ -213,9 +213,5 @@ return view.extend({
 		};
 
 		return m.render();
-	},
-
-	handleSaveApply: null,
-	handleSave: null,
-	handleReset: null
+	}
 });

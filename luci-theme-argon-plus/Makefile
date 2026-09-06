@@ -19,7 +19,7 @@ LUCI_TITLE:=Argon Plus - Argon theme with built-in configuration
 LUCI_DEPENDS:=+luci-base +@wget-any +jsonfilter
 
 PKG_VERSION:=2.4.3
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 LUCI_MINIFY_CSS:=0
 

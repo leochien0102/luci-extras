@@ -71,17 +71,21 @@ function mountSettings() {
 
 	after.insertAdjacentElement('afterend', wrapper);
 
-	L.require('view/argon-plus-config').then((viewClass) => {
+	/* Deliberately not a LuCI view and deliberately not under view/: a view
+	 * mounts itself the moment it is constructed -- LuCI.view's __init__
+	 * replaces the whole of #view with its own render() output -- and
+	 * L.require() constructs what it loads. Requiring a view from here
+	 * therefore wiped the System page and put the config in its place.
+	 * What comes back is the instance, not the class, so it is used as-is. */
+	L.require('argon-plus-config').then((config) => {
 		if (gen !== mountGeneration)
 			return;
 
-		const view = new viewClass();
-
-		return view.load().then((data) => {
+		return config.load().then((data) => {
 			if (gen !== mountGeneration)
 				return;
 
-			return view.render(data);
+			return config.render(data);
 		}).then((dom) => {
 			if (gen !== mountGeneration)
 				return;
