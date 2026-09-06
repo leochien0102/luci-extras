@@ -10,6 +10,7 @@ Each package lives in its own top-level subdirectory so that OpenWrt's
 |---|---|---|
 | `luci-app-accesscontrol-plus` | leochien0102 (original) | access control + miaplus |
 | `luci-app-ssrp-watch` | leochien0102 (original) | watchdog for the ssr-plus tunnel; see its own README |
+| `luci-theme-argon-plus` | luci feed (jerrykuku) | Argon theme + argon-config merged; see below |
 | `luci-theme-proton2025` | ChesterGoodiny/luci-theme-proton2025 | Proton2025 dark theme |
 
 All are firewall-generation-neutral; a single `main` branch serves
@@ -27,6 +28,17 @@ merge.
 (coolsnowwolf) ships a package of the same name and sits ahead of this one
 in `feeds.conf`, so `feeds install -a` always picked that one and the copy
 here was never built. Keeping two of them bought nothing.
+
+`luci-theme-argon-plus` is the answer to that dead end: the feed's
+`luci-theme-argon` and `luci-app-argon-config` merged into one package
+under a name that does not collide. Everything ships together -- theme,
+config UCI, rpcd backend and ACL -- and the settings UI is mounted inline
+below the theme selector on System Properties -> Language and Style,
+in the manner of `luci-theme-proton2025`, whenever the Argon Plus design
+is selected. There is no `System -> Argon Config` menu entry. Theme
+assets live under `/luci-static/argon-plus/` and the rpcd object is
+`luci.argon_plus`, so the package can coexist with the upstream theme
+in the same image; select this one instead of the two upstream packages.
 
 ## Usage
 

@@ -1,0 +1,21 @@
+{
+	"luci-theme-argon-plus": {
+		"description": "Grant access to the Argon Plus theme configuration",
+		"read": {
+			"file": {
+				"/www/luci-static/argon-plus/background/*": [ "list" ]
+			},
+			"ubus": {
+				"luci.argon_plus": [ "remove", "rename" ],
+				"system": [ "info" ]
+			},
+			"uci": [ "argon" ]
+		},
+		"write": {
+			"file": {
+				"/tmp/argon_background.tmp": [ "write" ]
+			},
+			"uci": [ "argon" ]
+		}
+	}
+}

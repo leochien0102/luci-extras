@@ -1,0 +1,16 @@
+Argon Plus is a fork of two packages from the OpenWrt luci feed
+(openwrt-25.12 branch), merged into one:
+
+  * themes/luci-theme-argon
+    Copyright (C) 2008-2019 Jerrykuku <jerrykuku@qq.com>
+    https://github.com/jerrykuku/luci-theme-argon
+    Licensed under the Apache License, Version 2.0.
+
+  * applications/luci-app-argon-config
+    Copyright (C) Jerrykuku and contributors
+    Licensed under the Apache License, Version 2.0.
+
+The theme resources live under htdocs/luci-static/argon-plus/ and the
+ucode templates under ucode/template/themes/argon-plus/ so this package
+can coexist with the upstream luci-theme-argon. The configuration UI is
+mounted inline on the Language and Style page instead of a menu page.
