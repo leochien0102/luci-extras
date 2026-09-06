@@ -48,6 +48,14 @@ endef
 define Package/$(PKG_NAME)/postrm
 #!/bin/sh
 [ -n "$$IPKG_INSTROOT" ] || {
+	# uci-defaults registers the theme in luci.themes and nothing took it back
+	# out, so the Design list kept offering a theme that was no longer there.
+	# Removing the theme in use also left mediaurlbase pointing at the missing
+	# directory, which stops LuCI rendering at all.
+	uci -q delete luci.themes.Proton2025
+	[ "$$(uci -q get luci.main.mediaurlbase)" = "/luci-static/proton2025" ] && \
+		uci -q set luci.main.mediaurlbase=/luci-static/bootstrap
+	uci -q commit luci
 	/etc/init.d/rpcd restart >/dev/null 2>&1 || true
 	rm -f /tmp/proton-search-prefetch-cache.json /tmp/proton-search-prefetch-cache-meta.json >/dev/null 2>&1 || true
 	rm -rf /tmp/proton-search-cache /tmp/proton-search-cache-meta >/dev/null 2>&1 || true

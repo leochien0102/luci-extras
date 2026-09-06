@@ -28,6 +28,25 @@ define Package/$(PKG_NAME)/conffiles
 /www/luci-static/argon-plus/background/
 endef
 
+# The uci-defaults script registers the theme in luci.themes; nothing takes it
+# back out, so an uninstalled theme keeps its entry in the Design list and
+# points it at a directory that is gone. Worse, removing the theme that is
+# currently in use leaves mediaurlbase aimed at that same missing directory,
+# and LuCI stops rendering at all -- recoverable only over ssh. Undo both.
+define Package/$(PKG_NAME)/postrm
+#!/bin/sh
+[ -n "$$IPKG_INSTROOT" ] || {
+	uci -q delete luci.themes.ArgonPlus
+	[ "$$(uci -q get luci.main.mediaurlbase)" = "/luci-static/argon-plus" ] && \
+		uci -q set luci.main.mediaurlbase=/luci-static/bootstrap
+	uci -q commit luci
+	rm -f /tmp/luci-indexcache* >/dev/null 2>&1 || true
+	rm -rf /tmp/luci-modulecache >/dev/null 2>&1 || true
+}
+
+exit 0
+endef
+
 include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature
