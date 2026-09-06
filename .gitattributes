@@ -1,0 +1,42 @@
+# OpenWrt feed 仓库：强制 LF 行尾。Windows checkout（core.autocrlf=true）会把
+# CRLF 注入文本文件，而 Makefile 里 define 出来的 postinst/postrm 会原样带进
+# ipk —— 脚本里每条命令末尾多一个 \r，参数和字符串比较全部静默失效。
+# 2026-09-06 实测：proton2025 的 Makefile 整份是 CRLF，其 postrm 一直半失效。
+* text=auto eol=lf
+
+Makefile    text eol=lf
+*.mk        text eol=lf
+*.sh        text eol=lf
+*.lua       text eol=lf
+*.js        text eol=lf
+*.uc        text eol=lf
+*.ut        text eol=lf
+*.htm       text eol=lf
+*.json      text eol=lf
+*.less      text eol=lf
+*.css       text eol=lf
+*.po        text eol=lf
+*.pot       text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+*.conf      text eol=lf
+
+# 无扩展名脚本目录（双保险）
+*/root/etc/init.d/*         text eol=lf
+*/root/etc/uci-defaults/*   text eol=lf
+*/root/usr/bin/*            text eol=lf
+*/root/usr/libexec/rpcd/*   text eol=lf
+*/root/usr/share/rpcd/ucode/* text eol=lf
+
+# 二进制（不做行尾处理）
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.gz    binary
+*.xz    binary
+*.zip   binary
