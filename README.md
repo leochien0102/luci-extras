@@ -37,8 +37,14 @@ below the theme selector on System Properties -> Language and Style,
 in the manner of `luci-theme-proton2025`, whenever the Argon Plus design
 is selected. There is no `System -> Argon Config` menu entry. Theme
 assets live under `/luci-static/argon-plus/` and the rpcd object is
-`luci.argon_plus`, so the package can coexist with the upstream theme
-in the same image; select this one instead of the two upstream packages.
+`luci.argon_plus`.
+
+The package does not declare package-manager-level conflicts (the feed's
+luci.mk has no channel for that), so keep the upstream pair out of the
+image config when this one is selected -- the openwrt-actions target
+configs already do. Its uci-defaults migrate away from the pair: a stale
+`luci.themes.Argon` entry carried over by sysupgrade is removed, and if
+Argon was the active theme, Argon Plus takes the slot.
 
 ## Usage
 

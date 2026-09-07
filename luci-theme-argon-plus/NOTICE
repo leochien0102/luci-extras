@@ -11,6 +11,6 @@ Argon Plus is a fork of two packages from the OpenWrt luci feed
     Licensed under the Apache License, Version 2.0.
 
 The theme resources live under htdocs/luci-static/argon-plus/ and the
-ucode templates under ucode/template/themes/argon-plus/ so this package
-can coexist with the upstream luci-theme-argon. The configuration UI is
+ucode templates under ucode/template/themes/argon-plus/, keeping every
+path distinct from the upstream packages. The configuration UI is
 mounted inline on the Language and Style page instead of a menu page.

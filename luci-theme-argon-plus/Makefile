@@ -19,9 +19,17 @@ LUCI_TITLE:=Argon Plus - Argon theme with built-in configuration
 LUCI_DEPENDS:=+luci-base +@wget-any +jsonfilter
 
 PKG_VERSION:=2.4.3
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 LUCI_MINIFY_CSS:=0
+
+# The images this feed builds select this package instead of the upstream
+# luci-theme-argon / luci-app-argon-config pair (see openwrt-actions
+# configs); the uci-defaults script below cleans up what they left behind.
+# Package-level Conflicts metadata is not expressible here: luci.mk
+# synthesizes the Package/ define with no CONFLICTS field, and the
+# buildroot's Package/Default reset clears global assignments before the
+# dump ever sees them.
 
 define Package/$(PKG_NAME)/conffiles
 /etc/config/argon
