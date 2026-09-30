@@ -46,6 +46,39 @@ configs already do. Its uci-defaults migrate away from the pair: a stale
 `luci.themes.Argon` entry carried over by sysupgrade is removed, and if
 Argon was the active theme, Argon Plus takes the slot.
 
+## Syncing `luci-theme-proton2025`
+
+The package is vendored from `ChesterGoodiny/luci-theme-proton2025` with
+`git subtree`. Sync to a release tag, not to `main` -- the tag is what
+`PROTON_VERSION` is pinned to:
+
+    git subtree pull --prefix=luci-theme-proton2025 \
+        https://github.com/ChesterGoodiny/luci-theme-proton2025 vX.Y.Z --squash
+    git commit --amend -m "⬆️ chore(proton2025): sync upstream vX.Y.Z"
+
+Upstream's tree does not satisfy this repo's `.gitattributes` (nor its own),
+so these four items have to be carried by hand **every time**:
+
+1. bump `PROTON_VERSION?=` in the package `Makefile`. Upstream's CI overrides
+   it from the release tag, so the value it commits always lags behind;
+2. re-normalise the CRLF files upstream keeps committing despite its own
+   `eol=lf` rules:
+
+       git add --renormalize -- luci-theme-proton2025
+       git ls-files --eol | awk '$1=="i/crlf" && /eol=lf/'
+
+   The second command must print nothing. A file left in that state shows a
+   permanent "modified" that `git checkout` cannot clear, and it makes
+   `scripts/feeds update` fail with "local changes would be overwritten".
+   `root/usr/share/rpcd/ucode/luci.proton-temp` is a ucode script: CRLF there
+   breaks it at runtime, which is how the `postrm` bug got in;
+3. keep the `postrm` hardening (drop `luci.themes.Proton2025`, restore
+   `mediaurlbase`). It is not upstream, so a merge may drop it;
+4. confirm nothing else drifted -- only `Makefile` may differ:
+
+       git --git-dir=<upstream-clone> archive vX.Y.Z | tar -x -C /tmp/up
+       diff -rq /tmp/up luci-theme-proton2025
+
 ## Usage
 
 In `feeds.conf`:
