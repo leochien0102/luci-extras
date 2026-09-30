@@ -12,9 +12,9 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-proton2025
 # Upstream's CI overrides these from the release tag and leaves a stale
-# default behind (v1.4.1 still says 1.4.0); feed builds never override, so
+# default behind (v1.4.2 still says 1.4.0); feed builds never override, so
 # keep them on the imported tag.
-PROTON_VERSION?=1.4.1
+PROTON_VERSION?=1.4.2
 PROTON_RELEASE?=1
 
 PKG_VERSION:=$(PROTON_VERSION)
@@ -26,8 +26,8 @@ LUCI_PKGARCH:=all
 
 LUCI_MINIFY_CSS:=0
 LUCI_MINIFY_UT:=0
-PKG_LICENSE:=Apache-2.0
-PKG_LICENSE_FILES:=LICENSE NOTICE
+PKG_LICENSE:=Apache-2.0 MIT
+PKG_LICENSE_FILES:=LICENSE NOTICE LICENSES/MIT-fluid.txt
 
 define Package/$(PKG_NAME)/conffiles
 /etc/config/proton2025
